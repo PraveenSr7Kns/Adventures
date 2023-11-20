@@ -1,0 +1,271 @@
+-- Installation Instructions of Postgres15 and PostGIS on Amazon Linux 2023
+-- ------------------------------------------------------------------------
+
+-- It is not a script; rather, it comprises instructions for setup. Read and follow each steps carefully :)
+
+-- My System config (Where I am installing)
+-- ----------------------------------------
+-- NAME="Amazon Linux"
+-- VERSION="2023"
+-- ID="amzn"
+-- ID_LIKE="fedora"
+-- VERSION_ID="2023"
+-- PLATFORM_ID="platform:al2023"
+-- PRETTY_NAME="Amazon Linux 2023"
+-- ANSI_COLOR="0;33"
+-- CPE_NAME="cpe:2.3:o:amazon:amazon_linux:2023"
+
+-- PostgresSQL
+-- -----------
+-- Let's start with Postgres Installation
+-- First, Update the machine
+sudo dnf update
+
+-- Use the below command for installing postgers
+-- In My case, I am using version 15
+-- Current version is 16 but I am going with 15
+sudo dnf install -y postgresql15.x86_64 postgresql15-server
+
+-- Note** - install postgres devel and contrib packages, dnf search to get the package
+-- contrip and devel packages are mandatory in this installations
+-- In my case,
+sudo dnf install postgresql15-contrib.aarch64
+sudo dnf install postgresql15-server-devel.aarch64
+
+-- Initialize after installing successfully
+sudo postgresql-setup --initdb
+
+-- Start the service
+sudo systemctl start postgresql
+
+-- Enable the Postgres
+sudo systemctl enable postgresql
+
+-- check the status, after all the above you should be seeing the positive response
+sudo systemctl status postgresql
+
+-- Below or look for config file location
+-- If you are not seeing on the below dir, use find / -name pg_hba.conf 
+sudo vim /var/lib/pgsql/data/pg_hba.conf
+
+--Scroll down until you see something like this, by default:
+
+# TYPE  DATABASE        USER            ADDRESS                 METHOD
+
+# "local" is for Unix domain socket connections only
+local   all             all                                     ident
+# IPv4 local connections:
+host    all             all             127.0.0.1/32            ident
+# IPv6 local connections:
+host    all             all             ::1/128                 ident
+
+-- Change it to read like this:
+# TYPE  DATABASE        USER            ADDRESS                 METHOD
+
+# "local" is for Unix domain socket connections only
+local   all             all                                     md5
+# IPv4 local connections:
+host    all             username	        0.0.0.0/0           md5
+host    all             other_username    0.0.0.0/0             md5
+# IPv6 local connections:
+host    all             all             ::1/128                 md5
+
+-- Double check the above step, or It may issue in log-in
+
+-- Remember the path you might need it later
+-- take a backup of the below file
+sudo cp /var/lib/pgsql/data/postgresql.conf /var/lib/pgsql/data/postgresql.conf.bak
+sudo vim /var/lib/pgsql/data/postgresql.conf
+
+-- Uncomment the line:
+#listen_addresses = 'localhost'          # what IP address(es) to listen on;
+
+-- Update the line to enable connections from any IP addresses:
+listen_addresses='*'
+
+-- Uncomment the line:
+#port = 5432
+
+-- To read like this:
+port = 5432
+
+-- Log into the postgresql
+
+sudo su - postgres
+psql -U postgres
+
+-- Add a password for your PostgreSQL admin
+
+ALTER USER postgres WITH PASSWORD '$password';
+
+-- Create user credentials for different users.
+-- Replace username with the username you want. Replace $password with the password you want.
+CREATE USER username SUPERUSER;
+ALTER USER username WITH PASSWORD '$password';
+
+CREATE USER username NOSUPERUSER;
+ALTER USER username WITH PASSWORD '$password';
+
+-- Restart after
+sudo systemctl restart postgresql
+
+-- We are done with the PostgresSQL Installation, Lets Move on to PostGIS
+
+-- PostGIS:
+-- --------
+
+-- Install the needed build tools
+sudo yum install gcc make gcc-c++ libtool libxml2-devel
+
+-- Some prerequisites
+-- Package may vary, use dnf search
+sudo dnf install libcurl.aarch64
+sudo dnf install libtiff.aarch64
+sudo dnf install libpng.aarch64
+
+-- Make sure to create a directory for every installation to avoid confusion
+-- Remember where you are downloading the files for the process
+-- In my case, /home/user_name
+
+-- Install GEOS - Use latest vesion/required
+-- In my case, 3.12.0
+mkdir Geos
+cd Geos
+wget https://download.osgeo.org/geos/geos-3.12.0.tar.bz2
+tar xjvf geos-3.12.0.tar.bz2
+cd geos-3.12.0
+./configure
+make
+sudo make install
+
+-- Install sqlite3 - Use latest Version/required
+mkdir Sqlite
+cd Sqlite
+wget https://www.sqlite.org/2023/sqlite-autoconf-3440000.tar.gz
+tar xvfz sqlite-autoconf-3440000.tar.gz
+cd sqlite-autoconf-3440000
+-- Note** --prefix=/usr/local, we are saying to use /usr/local path
+./configure --prefix=/usr/local
+make
+sudo make install
+
+--set the PKG_CONFIG_PATH to find the sqlite3.pc file
+
+export PKG_CONFIG_PATH=/your/path/name
+
+-- use find command to know the path
+--In my case - export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
+
+-- Remember these CMake configs, use when it needed
+-- cmake -DCMAKE_BUILD_TYPE=Release ..
+-- Note** find the .so files and path on your system and apply
+-- Below config error you might get during any Cmake installation
+-- cmake -DCURL_LIBRARY=/usr/lib64/libcurl.so -DCURL_INCLUDE_DIR=/usr/include/curl
+-- cmake -DTIFF_LIBRARY=/usr/lib/libtiff.so -DTIFF_INCLUDE_DIR=/usr/include .
+
+-- PROJ - Use latest Version/required
+mkdir Proj
+cd Proj
+wget https://download.osgeo.org/proj/proj-9.0.0.tar.gz
+tar -xvf proj-9.0.0.tar.gz
+cd proj-9.0.0
+mkdir build
+cd build
+cmake ..
+cmake --build .
+cmake --build . --target install
+
+-- Resolve issues on cmake during proj installation if you face
+-- you might have installed below things already
+-- I had issues. In my case, I followed below
+cmake -DCMAKE_BUILD_TYPE=Release ..
+cmake -DCURL_LIBRARY=/usr/lib64/libcurl.so -DCURL_INCLUDE_DIR=/usr/include/curl 
+cmake -DTIFF_LIBRARY=/usr/lib/libtiff.so -DTIFF_INCLUDE_DIR=/usr/include .
+cmake --build . && cmake --build . --target install
+
+-- GDAL - Use latest Version/required
+mkdir Gdal
+cd Gdal
+wget https://github.com/OSGeo/gdal/releases/download/vx.x.x/gdal-3.7.3.tar.gz
+tar -xvf gdal-3.7.3.tar.gz
+cd gdal-3.7.3
+./configure --with-proj=/usr/local --with-python
+sudo make
+sudo make install
+
+-- if the source using cmake - then follow the Proj installation steps (Cmake)
+
+-- check below env variables, if not set, source it or it will affet the PostGIS
+export GDAL_DATA="/usr/local/share/gdal"
+export LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib64:$LD_LIBRARY_PATH
+
+-- SFCGAL (Install if needed)
+-- Note** Incase of SFCGAL support, it has to be installed
+-- SFCGAL needs CGAL 
+-- Install CGAL
+mkdir Sfcgal
+cd Sfcgal
+wget https://github.com/CGAL/cgal/releases/download/v5.6/CGAL-5.6.tar.xz
+tar -xf CGAL-5.6.tar.xz
+cd CGAL-5.6/
+mkdir build
+cd build
+cmake -DCMAKE_BUILD_TYPE=Release ..
+make install
+cd ../examples/Triangulation_2
+cmake -DCGAL_DIR=$CMAKE_INSTALLED_PREFIX/lib/CGAL -DCMAKE_BUILD_TYPE=Release .
+make
+sudo make install
+
+-- Install SFCGAL
+mkdir Sfcgal
+cd Sfcal/
+cd SFCGAL-v1.5.0/
+mkdir build
+cd build
+cmake -DCMAKE_BUILD_TYPE=Release ..
+cmake --build .
+cmake --build . --target install
+
+-- PostGIS - Use latest Version/required
+mkdir PostGIS
+cd PostGIS
+wget http://download.osgeo.org/postgis/source/postgis-3.4.0.tar.gz
+tar zxvf postgis-3.4.0.tar.gz 
+cd postgis-3.4.0
+-- include sfcgal-config only if you have installed it
+./configure --with-geosconfig=/usr/local/bin/geos-config --with-sfcgal=/usr/local/bin/sfcgal-config
+make
+sudo make install
+
+--Create a temporary database to test
+
+createdb -U postgres temp_postgis
+psql -U postgres -d temp_postgis < /your/path/postgis.sql
+psql -U postgres -d temp_postgis < /your/path/spatial_ref_sys.sql
+
+-- Create the below Extensions
+-- Enable PostGIS (includes raster)
+CREATE EXTENSION postgis;
+
+-- Enable Topology
+CREATE EXTENSION postgis_topology;
+
+-- Enable PostGIS Advanced 3D
+-- and other geoprocessing algorithms
+-- Note** - sfcgal not available with all distributions
+CREATE EXTENSION postgis_sfcgal;
+
+-- fuzzy matching mandatory for Tiger
+CREATE EXTENSION fuzzystrmatch;
+
+-- rule based standardizer
+CREATE EXTENSION address_standardizer;
+
+-- example rule data set
+CREATE EXTENSION address_standardizer_data_us;
+
+-- Enable US Tiger Geocoder
+CREATE EXTENSION postgis_tiger_geocoder;
+
+-- If you have done all the steps, crab a coffee and relax, Good Luck!
