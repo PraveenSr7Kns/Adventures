@@ -1,0 +1,106 @@
+Tomcat Setup:
+-------------
+
+-- Download Required Apache
+-- In my case, 9.0.83
+-- Extact it
+tar -xvzf apache-tomcat-9.0.83.zip
+
+-- Download JDK
+wget https://download.oracle.com/java/18/archive/jdk-18.0.1.1_linux-x64_bin.tar.gz
+tar -xvzf jdk-18.0.1.1_linux-x64_bin.tar.gz jdk-18.0.1.1
+Move it to some dir where it needs to below
+-- In my case,
+mv jdk-18.0.1.1 /opt/
+
+-- Let's confgure tommy
+-- --------------------
+
+cp vi server.xml server.xml_03102025
+vi server.xml
+<Resource name="jdbc/wtbTigerDB" auth="Container" type="javax.sql.DataSource"
+    maxTotal="100" maxIdle="100" maxWaitMillis="10000"
+    username="wtbuser" password="pg#228pA&amp;dYfNSAU" driverClassName="org.postgresql.Driver"
+    url="jdbc:postgresql://localhost:5432/geotiger"/>
+	
+-- Change port and connection as you need
+-- in my case,
+<Connector port="80" protocol="HTTP/1.1"
+    connectionTimeout="20000"
+    maxThreads="200"/>
+
+cp vi context.xml context.xml_03102025
+vi context.xml
+-- (Depends on your needs) Add below under <Context> (I am using jndi)
+<ResourceLink global="jdbc/wtbTigerDB" name="jdbc/wtbTigerDB" type="javax.sql.DataSource"/>
+
+We have a status check on reboot, so
+touch /srv/tomcat/webapps/status.xml
+echo "Tiger New Model DB Server with 2024 Data: 172.31.5.161"  /srv/tomcat/webapps/status.xml
+
+-- Let's make tomcat as a service now
+-- -----------------------------------
+
+-- create a script file
+
+I am creating it under /etc/rc.d/init.d/tomcat
+
+sudo vi /etc/rc.d/init.d/tomcat
+
+-- below are the content
+#!/bin/bash
+# description: Tomcat Start Stop Restart
+# processname: tomcat
+# chkconfig: 234 20 80
+JAVA_HOME=/opt/jdk-18.0.1.1
+export JAVA_HOME
+PATH=$JAVA_HOME/bin:$PATH
+export PATH
+CATALINA_HOME=/srv/tomcat/
+case $1 in
+start)  echo "Delaying the start by 90 seconds"
+        sleep 90
+        sh $CATALINA_HOME/bin/startup.sh
+;;
+stop) sh $CATALINA_HOME/bin/shutdown.sh
+;;
+restart) sh $CATALINA_HOME/bin/shutdown.sh
+         sh $CATALINA_HOME/bin/startup.sh
+;;
+esac
+exit 0
+
+-- Register with chkconfig
+sudo chkconfig --add tomcat
+
+-- Enable tomcat on boot
+sudo chkconfig --level 234 tomcat on
+
+-- Verify
+chkconfig --list tomcat
+
+-- You should see below
+tomcat          0:off   1:off   2:on    3:on    4:on    5:off   6:off
+
+-- below will create tomcat.service file and links
+sudo systemctl daemon-reexec
+
+sudo systemctl start tomcat
+systemctl status tomcat
+
+-- if you want to check whether it is starting on boot
+sudo reboot
+
+-- That's it and learn the chkconfig - will be helpful
+
+-- Finally crontab
+-- ---------------
+-- install if you dont have
+
+sudo dnf install cronie
+sudo systemctl start crond
+sudo systemctl enable crond
+
+-- Add the status check in crontab
+crontab -e
+@reboot echo "Tiger DB Server: $(hostname -I)" > /srv/tomcat/webapps/server/status.html
