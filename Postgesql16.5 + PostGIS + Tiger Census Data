@@ -1,4 +1,4 @@
--- Installation Instructions of Postgres16.5 and PostGIS on Amazon Linux 2023
+-- Installation Instructions of Postgres16 and PostGIS on Amazon Linux 2023
 -- ------------------------------------------------------------------------
 
 -- It is not a script; rather, it comprises instructions for setup. Read and follow each steps carefully :)
@@ -46,7 +46,7 @@ Created symlink /etc/systemd/system/multi-user.target.wants/postgresql.service â
 sudo systemctl status postgresql
 
 -- Before you do any config changes, You need to update the password of "postgres" user
--- if not, you may face login issue with the default user "postgres"
+-- if not, you may face login issue with the default user "postgres" since you have no idea about the password
 
 -- in my case, I am following below
 sudo su - postgres
@@ -57,7 +57,7 @@ psql -U postgres
 ALTER USER postgres WITH PASSWORD 'xxxxxxx';
 
 -- Create user credentials for different users.
--- Replace username with the username you want. Replace $password with the password you want.
+-- Replace username with the username you want. Replace xxxxxxx with the password you want.
 CREATE USER username SUPERUSER;
 ALTER USER username WITH PASSWORD '$password';
 
@@ -183,7 +183,7 @@ max_locks_per_transaction = 128          # min 10
 shared_preload_libraries = 'pg_cron'
 
 -- Restart once
--- Log into the postgresql
+-- Login into the postgresql
 
 -- Login with posgres user
 psql -U postgres
@@ -200,7 +200,7 @@ ALTER ROLE praveenkns CREATEDB;
 -- PostGIS:
 -- --------
 -- Some prerequisites
--- prerequisites? Yes. Missing below can stop any installation, then you will have to install everything in a loop
+-- prerequisites? Yes. Missing below can stop any installation, then you will have to install everything in a loop, I lost days in it.
 -- You need these to proceed with further installation, Coz I have collected all them from many failures!
 -- Package may vary, use dnf search
 sudo yum install gcc make gcc-c++ libtool libxml2-devel
